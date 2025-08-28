@@ -1,0 +1,42 @@
+### Cursor Prompt: Execute Ticket TICKET-2004
+
+Please execute this ticket:
+
+Ticket to execute:
+- TICKET_ID: 2004
+- TICKET_NAME: Ticket-2004.md
+- TICKET_FILE: /Users/adam/Documents/GitHub/AI_Chat_Conversation_Analysis_Take_Home_Interview/Tickets/Sprint 2/Ticket-2004.md
+
+Permanent references (always follow):
+- Architecture: /Users/adam/Documents/GitHub/AI_Chat_Conversation_Analysis_Take_Home_Interview/Documentation/Architecture Document.md
+- Implementation Plan: /Users/adam/Documents/GitHub/AI_Chat_Conversation_Analysis_Take_Home_Interview/Documentation/Implementation Plan Document.md
+- Product Requirements: /Users/adam/Documents/GitHub/AI_Chat_Conversation_Analysis_Take_Home_Interview/Documentation/Product Requirements Document.md
+- Project Structure: /Users/adam/Documents/GitHub/AI_Chat_Conversation_Analysis_Take_Home_Interview/Build Documentation/structure.md
+- Troubleshooting: /Users/adam/Documents/GitHub/AI_Chat_Conversation_Analysis_Take_Home_Interview/Build Documentation/Troubleshooting.md
+- Sprint Progress: /Users/adam/Documents/GitHub/AI_Chat_Conversation_Analysis_Take_Home_Interview/Build Documentation/Sprint-Progress.md
+
+Environment and secrets:
+- Use .env (never commit secrets). If new keys are needed, add placeholders to .env.example and document in README.
+
+Objective:
+- Implement TICKET-2004 fully: write `reports/Insights Document.md` with visuals and strategic recommendations.
+
+Constraints and style:
+- Follow Engineering Best Practices.
+- Keep changes scoped. No secrets in code or logs.
+
+Required steps:
+1) Read the ticket file.
+2) Draft the Executive Summary and integrate required charts and snippets.
+3) Add Strategic Recommendations tied to findings.
+4) Documentation updates: Sprint-Progress, Troubleshooting (if any), structure.
+5) Testing:
+   - Add lightweight checks ensuring referenced images exist and document sections are present (e.g., headings). Run tests; fix failures.
+
+Output:
+- Summary of the document contents and where to find assets.
+
+Success criteria:
+- Insights document complete with visuals and recommendations.
+- Tests added and passing.
+- Docs updated (Sprint-Progress, Troubleshooting, structure). 
