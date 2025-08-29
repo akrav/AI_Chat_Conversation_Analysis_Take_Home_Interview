@@ -55,3 +55,10 @@ Issue: Preprocessing line count mismatch
 - Root cause: Underlying HTTP pulls may return fewer rows if the server throttles.
 - Resolution: Tests use small sizes; production runs should check counts and loop or adjust throttle if needed.
 - Status: Documented; loader supports throttling and backoff.
+
+Issue: BERTopic runtime and sklearn warnings
+
+- Symptom: Long runtime on first run; FutureWarning from sklearn about `force_all_finite`.
+- Root cause: Model downloads and numeric checks in newer sklearn.
+- Resolution: Acceptable for analysis; warning harmless. Consider caching embeddings or reducing sample size for quicker iterations.
+- Status: Noted; tests pass with warnings.

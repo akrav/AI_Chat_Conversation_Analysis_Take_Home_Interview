@@ -1,0 +1,2 @@
+data/01_raw/*.jsonl filter=lfs diff=lfs merge=lfs -text
+data/02_interim/*.jsonl filter=lfs diff=lfs merge=lfs -text

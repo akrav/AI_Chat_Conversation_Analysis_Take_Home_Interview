@@ -1,14 +1,16 @@
 import pandas as pd
 
-from src.wildchat_loader import load_wildchat_subset
+from src.hf_loader import load_filter_to_dataframe
 from src.wildchat_to_dataframe import rows_to_dataframe, basic_eda_summary
 
 
 def test_rows_to_dataframe_structure():
-    rows = load_wildchat_subset(sample_size=5, prefer_http=True)
-    df = rows_to_dataframe(rows)
-    assert isinstance(df, pd.DataFrame)
-    assert len(df) == 5
+    # Load a small non-stream subset then filter to 100 rows via pandas
+    df = load_filter_to_dataframe(language='English', toxic=False, limit=100, split='train[:1000]')
+    rows = df.to_dict(orient='records')
+    df2 = rows_to_dataframe(rows)
+    assert isinstance(df2, pd.DataFrame)
+    assert len(df2) == 100
 
 
 def test_basic_eda_summary_fields():

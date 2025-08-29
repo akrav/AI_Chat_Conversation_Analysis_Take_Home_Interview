@@ -36,3 +36,13 @@ Sprint 1 Progress
     - Added tests `tests/test_text_cleaning.py`; total tests now 10 passed
     - Saved sample: `data/02_interim/wildchat_cleaned_500.jsonl`
   - Next: Ticket-1005 (BERTopic analysis)
+
+- Ticket-1005: Execute BERTopic analysis on the preprocessed dataset
+  - Status: Completed
+  - Actions:
+    - Installed BERTopic and dependencies
+    - Added `src/bertopic_pipeline.py` to load docs, run model, and save outputs
+    - Added smoke test `tests/test_bertopic_pipeline.py`; full suite 11 passed
+    - Ran analysis on `data/02_interim/wildchat_cleaned_500.jsonl`
+    - Saved results: `reports/bertopic_topics.csv`, `reports/bertopic_doc_topics.csv`
+  - Next: Proceed to Sprint 2
