@@ -41,3 +41,17 @@ Issue: 422/429 from datasets-server when fetching large samples
   - Add exponential backoff and respect `Retry-After`.
   - Throttle between requests (`throttle_seconds`).
 - Status: Implemented in `wildchat_loader.py` (HTTP-only). For very large pulls, increase throttle to reduce 429s.
+
+Issue: Text cleaning removes URLs and special characters
+
+- Symptom: URLs remain or excessive whitespace persists.
+- Root cause: Insufficient regex coverage.
+- Resolution: Added URL removal, special char filtering, and whitespace collapsing in `clean_text`.
+- Status: Covered by `tests/test_text_cleaning.py`.
+
+Issue: Preprocessing line count mismatch
+
+- Symptom: Saved JSONL does not match requested sample size.
+- Root cause: Underlying HTTP pulls may return fewer rows if the server throttles.
+- Resolution: Tests use small sizes; production runs should check counts and loop or adjust throttle if needed.
+- Status: Documented; loader supports throttling and backoff.

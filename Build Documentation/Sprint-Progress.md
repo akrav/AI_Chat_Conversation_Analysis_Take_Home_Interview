@@ -27,3 +27,12 @@ Sprint 1 Progress
     - Added tests `tests/test_wildchat_to_dataframe.py` (HTTP-only) — 7 passed total
     - Created notebook `notebooks/01_data_exploration.ipynb` with summary and a sample visualization
   - Next: Ticket-1004 (Cleaning function and preprocessing)
+
+- Ticket-1004: Create and apply the data cleaning function
+  - Status: Completed
+  - Actions:
+    - Added `src/text_cleaning.py` with reusable text cleaning utilities
+    - Added `src/preprocess.py` to load via HTTP, clean conversations, and save to `data/02_interim/`
+    - Added tests `tests/test_text_cleaning.py`; total tests now 10 passed
+    - Saved sample: `data/02_interim/wildchat_cleaned_500.jsonl`
+  - Next: Ticket-1005 (BERTopic analysis)
