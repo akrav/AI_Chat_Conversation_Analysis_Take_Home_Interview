@@ -19,3 +19,11 @@ Sprint 1 Progress
   - Notes:
     - No HF tokens required for this project. Endpoints documented in Troubleshooting.
   - Next: Ticket-1003 (DataFrame conversion and EDA)
+
+- Ticket-1003: Convert to DataFrame and perform initial EDA
+  - Status: Completed
+  - Actions:
+    - Added `src/wildchat_to_dataframe.py` with DataFrame conversion and EDA helpers
+    - Added tests `tests/test_wildchat_to_dataframe.py` (HTTP-only) — 7 passed total
+    - Created notebook `notebooks/01_data_exploration.ipynb` with summary and a sample visualization
+  - Next: Ticket-1004 (Cleaning function and preprocessing)

@@ -31,3 +31,13 @@ Issue: HTTP-only data access design
   - Parquet listing: `https://huggingface.co/api/datasets/allenai/WildChat/parquet/default/train`
 - Implementation: `src/wildchat_loader.py` fetches batches of rows via Rows API and writes JSONL.
 - Status: Working. Tests pass using HTTP-only path.
+
+Issue: 422/429 from datasets-server when fetching large samples
+
+- Symptom: `HTTPError: 422 Unprocessable Entity` for length>100 and `429 Too Many Requests` during large pulls.
+- Root cause: API enforces max `length=100` and rate limits repeated calls.
+- Resolution:
+  - Clamp per-request length to 100.
+  - Add exponential backoff and respect `Retry-After`.
+  - Throttle between requests (`throttle_seconds`).
+- Status: Implemented in `wildchat_loader.py` (HTTP-only). For very large pulls, increase throttle to reduce 429s.
