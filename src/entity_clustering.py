@@ -7,6 +7,16 @@ import numpy as np
 import pandas as pd
 
 
+def _normalize_entity(text: Optional[str]) -> str:
+    if not isinstance(text, str):
+        return ""
+    # Lowercase, remove non-alphanumeric except spaces, collapse whitespace
+    s = text.lower()
+    s = "".join(ch if ch.isalnum() or ch.isspace() else " " for ch in s)
+    s = " ".join(s.split())
+    return s
+
+
 def _embed_texts(texts: list[str]) -> np.ndarray:
     try:
         from sentence_transformers import SentenceTransformer
@@ -59,17 +69,20 @@ def cluster_entities(
     min_cluster_size: int = 3,
 ) -> str:
     df = pd.read_csv(unified_csv_path)
-    # Prepare texts for embedding: combine category + entity for better separation
-    mask = df["llm_entity"].astype(str).str.strip().ne("") & df["llm_entity"].notna()
+    # Prepare normalized entities used for clustering
+    df["entity_norm"] = df.get("llm_entity", pd.Series([None] * len(df))).apply(_normalize_entity)
+    # Combine category + normalized entity for better separation
+    mask = df["entity_norm"].astype(str).str.strip().ne("") & df["entity_norm"].notna()
     texts = (
-        df.loc[mask, ["llm_entity_category", "llm_entity"]]
+        df.loc[mask, ["llm_entity_category", "entity_norm"]]
         .fillna("")
         .astype(str)
-        .apply(lambda r: f"{r['llm_entity_category']} :: {r['llm_entity']}", axis=1)
+        .apply(lambda r: f"{r['llm_entity_category']} :: {r['entity_norm']}", axis=1)
         .tolist()
     )
     if not texts:
         df["entity_cluster_id"] = -1
+        df["entity_cluster_label"] = None
     else:
         emb = _embed_texts(texts)
         labels = _cluster_embeddings(emb, min_cluster_size=min_cluster_size)
@@ -83,6 +96,17 @@ def cluster_entities(
             mapping = {old: new for new, old in enumerate(unique_labels)}
             entity_cluster_id = entity_cluster_id.apply(lambda x: mapping.get(x, -1))
         df["entity_cluster_id"] = entity_cluster_id
+        # Build human-readable labels: top-3 normalized entities per cluster
+        label_map: dict[int, str] = {}
+        grp = df[df["entity_cluster_id"].ge(0)].groupby("entity_cluster_id")
+        for cid, sub in grp:
+            top_entities = (
+                sub["entity_norm"].value_counts()
+                .head(3)
+                .index.tolist()
+            )
+            label_map[int(cid)] = ", ".join([t for t in top_entities if t]) if top_entities else ""
+        df["entity_cluster_label"] = df["entity_cluster_id"].apply(lambda cid: label_map.get(int(cid), None) if cid >= 0 else None)
 
     out_path = output_csv_path or unified_csv_path
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
