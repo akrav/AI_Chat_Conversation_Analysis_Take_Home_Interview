@@ -19,7 +19,7 @@ Environment and secrets:
 - Use .env (never commit secrets). If new keys are needed, add placeholders to .env.example and document in README.
 
 Objective:
-- Implement TICKET-2004 fully: write `reports/Insights Document.md` with visuals and strategic recommendations.
+- Implement TICKET-2004 fully: synthesize BERTopic + LLM outputs and generate required visualizations saved to `reports/images`.
 
 Constraints and style:
 - Follow Engineering Best Practices.
@@ -27,16 +27,17 @@ Constraints and style:
 
 Required steps:
 1) Read the ticket file.
-2) Draft the Executive Summary and integrate required charts and snippets.
-3) Add Strategic Recommendations tied to findings.
-4) Documentation updates: Sprint-Progress, Troubleshooting (if any), structure.
-5) Testing:
-   - Add lightweight checks ensuring referenced images exist and document sections are present (e.g., headings). Run tests; fix failures.
+2) Merge analysis outputs into a unified structure.
+3) Create time series of topic frequency, intents distribution bar chart, and sentiment-topic visuals.
+4) Save all images to `reports/images` with clear naming.
+5) Documentation updates (Sprint-Progress, Troubleshooting, structure).
+6) Testing:
+   - Add tests that check image files exist and basic data assumptions. Run tests; fix failures.
 
 Output:
-- Summary of the document contents and where to find assets.
+- Summary of visualizations created, file paths, and test commands.
 
 Success criteria:
-- Insights document complete with visuals and recommendations.
+- All required visualizations created and saved.
 - Tests added and passing.
 - Docs updated (Sprint-Progress, Troubleshooting, structure). 

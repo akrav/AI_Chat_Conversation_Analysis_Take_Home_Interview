@@ -16,10 +16,10 @@ Permanent references (always follow):
 - Sprint Progress: /Users/adam/Documents/GitHub/AI_Chat_Conversation_Analysis_Take_Home_Interview/Build Documentation/Sprint-Progress.md
 
 Environment and secrets:
-- Use .env (never commit secrets). If new keys are needed, add placeholders to .env.example and document in README.
+- Use .env (never commit secrets). For new keys, add placeholders to env.example and document in README.
 
 Objective:
-- Implement TICKET-2003 fully: synthesize BERTopic + LLM outputs and generate required visualizations saved to `reports/images`.
+- Implement rule-based sentiment analysis using NLTK VADER and TextBlob, and write a CSV to `data/04_analysis/sentiment_rule_based.csv`.
 
 Constraints and style:
 - Follow Engineering Best Practices.
@@ -27,17 +27,15 @@ Constraints and style:
 
 Required steps:
 1) Read the ticket file.
-2) Merge analysis outputs into a unified structure.
-3) Create time series of topic frequency, intents distribution bar chart, and sentiment-topic visuals.
-4) Save all images to `reports/images` with clear naming.
-5) Documentation updates (Sprint-Progress, Troubleshooting, structure).
+2) Add `src/sentiment_rule_based.py` with VADER and TextBlob functions and a batch processor for the subset JSONL.
+3) Write outputs to `data/04_analysis/sentiment_rule_based.csv` with required columns.
+4) Add tests: known strings and tiny JSONL batch.
+5) Documentation updates (Sprint-Progress, Troubleshooting if needed).
 6) Testing:
-   - Add tests that check image files exist and basic data assumptions. Run tests; fix failures.
+   - Run tests; fix failures until green.
 
 Output:
-- Summary of visualizations created, file paths, and test commands.
+- Concise summary of outputs created and how to run the sentiment batch.
 
 Success criteria:
-- All required visualizations created and saved.
-- Tests added and passing.
-- Docs updated (Sprint-Progress, Troubleshooting, structure). 
+- CSV saved with expected columns; tests added and passing; docs updated. 

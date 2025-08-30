@@ -1,19 +1,19 @@
-### Ticket-2004: Generate final insights document and strategic recommendations
+### Ticket-2003: Synthesize findings and create visualizations
 
 **Description**
-- Create the final, comprehensive insights document by synthesizing findings and linking them to actionable brand strategies.
+- Aggregate findings from both the BERTopic and LLM analysis and create visualizations for the final insights document.
 
 **Tasks**
-- Create `Insights Document.md` in the `reports/` folder.
-- Write an Executive Summary highlighting key findings from both analyses (high-frequency topics, emerging/underserved areas, business value).
-- Integrate visualizations from Ticket-2003, properly referenced and explained.
-- Include conversational snippets from the LLM analysis that illustrate key insights.
-- Add a section on Strategic Recommendations linking insights to practical brand actions (product improvement, marketing messages, support workflows).
+- Combine results from `data/04_analysis/bertopic_results.csv` and `data/04_analysis/llm_results.csv` into a unified data structure.
+- Generate a visualization showing the frequency of topics over time to identify trends.
+- Create a bar chart to show the distribution of LLM-classified user intents.
+- Generate visualizations showing the relationship between LLM-categorized sentiment and specific topics.
+- Save all generated visualizations in the `reports/images` folder.
 
 **Recommended Tools**
-- Markdown.
+- Python, `Pandas`, `Matplotlib`, `Seaborn`.
 
 **How to Test**
-- Test: Verify `Insights Document.md` exists in `reports/`.
-- Test: Manually review to ensure all required components are present, well-formatted, and clear.
+- Test: Verify that visualizations are generated and saved to `reports/images` with appropriate filenames.
+- Test: Visually inspect charts to ensure clarity and accurate representation.
 - If a test fails: Analyze the error and loop to fix. Update `/Users/adam/Documents/GitHub/AI_Chat_Conversation_Analysis_Take_Home_Interview/Build Documentation/Troubleshooting.md` if needed. 
