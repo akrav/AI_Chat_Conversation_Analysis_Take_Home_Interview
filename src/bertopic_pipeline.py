@@ -76,19 +76,24 @@ def run_bertopic(
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2",
     min_topic_size: int = 5,
 ) -> Tuple[BERTopic, List[int], Optional[List[List[float]]]]:
-    n_docs = max(2, len(docs))
-    # Relax UMAP neighborhood to reduce outliers
-    n_neighbors = max(10, min(30, n_docs - 1))
+    # Determine sufficient-context documents but keep all docs length
+    sufficient_mask = [
+        _has_enough_content(d, min_nonstop_tokens=3) for d in docs
+    ]
+    idx_sufficient = [i for i, ok in enumerate(sufficient_mask) if ok]
+
+    # Build UMAP
+    n_docs_eff = max(2, len(idx_sufficient) if idx_sufficient else len(docs))
+    n_neighbors = max(10, min(30, n_docs_eff - 1))
     umap_model = UMAP(n_neighbors=n_neighbors, n_components=5, metric="cosine", random_state=42, init="random")
 
-    # Custom vectorizer to avoid stopword topics
+    # Stopwords
     domain_stop = {
         "the","and","or","to","of","in","on","for","with","a","an","is","are","was","were","be","been","it","its","this","that","these","those","as","at","by","from","into","out","up","down","over","under","you","your","i","we","our","they","their","he","she","his","her","them","do","does","did","can","could","would","should","may","might","will","just","also","like","get","got","make","made","use","used","using","one","two","three","etc"
     }
     stop = list(sklearn_text.ENGLISH_STOP_WORDS.union(domain_stop))
-    vectorizer_model = CountVectorizer(stop_words=stop, ngram_range=(1, 3), min_df=5, max_df=0.9)
 
-    # Relax HDBSCAN clustering to assign more points to clusters
+    # HDBSCAN
     hdbscan_model = hdbscan.HDBSCAN(
         min_cluster_size=max(5, min_topic_size),
         min_samples=1,
@@ -97,45 +102,74 @@ def run_bertopic(
     )
 
     rep = KeyBERTInspired()
-    topic_model = BERTopic(
-        embedding_model=embedding_model,
-        min_topic_size=min_topic_size,
-        umap_model=umap_model,
-        hdbscan_model=hdbscan_model,
-        vectorizer_model=vectorizer_model,
-        representation_model=rep,
-        calculate_probabilities=True,
-        verbose=False,
-    )
-    topics, probs = topic_model.fit_transform(docs)
 
-    # Reassign outliers to closest topics
-    try:
-        new_topics = topic_model.reduce_outliers(docs, topics, probabilities=probs)
-        topic_model.update_topics(docs, topics=new_topics)
-        topics = new_topics
-    except Exception:
-        # If reduce_outliers fails for any reason, keep original topics
-        pass
+    def build_model(min_df: int, max_df: float, ngram: Tuple[int, int]) -> BERTopic:
+        vectorizer_model = CountVectorizer(stop_words=stop, ngram_range=ngram, min_df=min_df, max_df=max_df)
+        return BERTopic(
+            embedding_model=embedding_model,
+            min_topic_size=min_topic_size,
+            umap_model=umap_model,
+            hdbscan_model=hdbscan_model,
+            vectorizer_model=vectorizer_model,
+            representation_model=rep,
+            calculate_probabilities=True,
+            verbose=False,
+        )
 
-    return topic_model, topics, probs
+    topics_full: List[int] = [-1] * len(docs)
+    probs_full: Optional[List[List[float]]] = None
+
+    if idx_sufficient:
+        eff_docs = [docs[i] for i in idx_sufficient]
+        # First attempt
+        topic_model = build_model(min_df=5, max_df=0.9, ngram=(1, 2))
+        try:
+            topics_eff, probs_eff = topic_model.fit_transform(eff_docs)
+        except ValueError:
+            topic_model = build_model(min_df=1, max_df=1.0, ngram=(1, 1))
+            topics_eff, probs_eff = topic_model.fit_transform(eff_docs)
+        # Reduce outliers
+        try:
+            new_topics_eff = topic_model.reduce_outliers(eff_docs, topics_eff, probabilities=probs_eff)
+            topic_model.update_topics(eff_docs, topics=new_topics_eff)
+            topics_eff = new_topics_eff
+        except Exception:
+            pass
+        # Map back
+        for j, i in enumerate(idx_sufficient):
+            topics_full[i] = int(topics_eff[j]) if topics_eff[j] is not None else -1
+        probs_full = None  # not used downstream
+    else:
+        # No sufficient docs: build a trivial model to keep downstream happy
+        topic_model = build_model(min_df=1, max_df=1.0, ngram=(1, 1))
+        # Fit on minimal dummy corpus to initialize internal structures
+        _ = topic_model.fit_transform(["other"])
+
+    return topic_model, topics_full, probs_full
 
 
 def save_outputs(
     topic_model: BERTopic,
     docs: List[str],
     topics: List[int],
-    identities: List[Dict[str, str]],
+    identities: List[Dict[str, str]] | List[str],
     output_dir: str = "reports",
 ) -> Dict[str, str]:
     os.makedirs(output_dir, exist_ok=True)
 
     # Topic info normalized
     ti = topic_model.get_topic_info().rename(columns={"Topic": "topic_id", "Count": "count", "Name": "topic_name"})
+    # Ensure an 'Other' topic row exists to represent -1 assignments
+    if -1 not in set(pd.to_numeric(ti.get("topic_id", pd.Series(dtype=int)), errors="coerce").fillna(-1).astype(int)):
+        other_count = sum(1 for t in topics if int(t) == -1)
+        ti = pd.concat([
+            ti,
+            pd.DataFrame([[ -1, "Other", other_count, json.dumps([], ensure_ascii=False) ]], columns=["topic_id","topic_name","count","top_words"]).astype({"topic_id": int, "count": int})
+        ], ignore_index=True)
     # Sanitize topic_name (remove newlines)
     if "topic_name" in ti.columns:
         ti["topic_name"] = ti["topic_name"].astype(str).str.replace("\r", " ", regex=False).str.replace("\n", " ", regex=False)
-    # Build top_words as JSON array of strings (top-10)
+    # Build top_words as JSON array of strings (top-10) for non -1 topics
     top_rows = []
     for _, row in ti.iterrows():
         try:
@@ -157,9 +191,30 @@ def save_outputs(
     ti.to_csv(topics_csv, index=False, quoting=csv.QUOTE_ALL, lineterminator="\n")
 
     # Document-topic mapping with stable schema
-    df = pd.DataFrame(identities)
-    df["topic"] = topics
-    df["doc"] = docs
+    # identities may be list of dicts or list of conversation_ids
+    if isinstance(identities, list) and identities and not isinstance(identities[0], dict):
+        conv_ids = [str(x) for x in identities]  # type: ignore
+        df = pd.DataFrame({
+            "doc_id": [f"doc_{i}" for i in range(len(docs))],
+            "conversation_id": conv_ids,
+            "role": None,
+            "turn_index": -1,
+        })
+    else:
+        df = pd.DataFrame(identities)  # type: ignore
+        # Ensure required columns
+        if "doc_id" not in df.columns:
+            df["doc_id"] = [f"doc_{i}" for i in range(len(docs))]
+        if "conversation_id" not in df.columns:
+            df["conversation_id"] = None
+        if "role" not in df.columns:
+            df["role"] = None
+        if "turn_index" not in df.columns:
+            df["turn_index"] = -1
+    # Assign topics and docs
+    df = df.iloc[:len(docs)].copy()
+    df["topic"] = topics[:len(docs)]
+    df["doc"] = docs[:len(docs)]
     df = df[["doc_id", "conversation_id", "role", "turn_index", "topic", "doc"]]
     doc_topics_csv = os.path.join(output_dir, "bertopic_doc_topics.csv")
     df.to_csv(doc_topics_csv, index=False, quoting=csv.QUOTE_ALL, lineterminator="\n")

@@ -36,7 +36,7 @@ def _embed_texts(texts: list[str]) -> np.ndarray:
 
 def _cluster_embeddings(embeddings: np.ndarray, min_cluster_size: int = 3) -> np.ndarray:
     try:
-        import hdbscan
+        import hdbscan  # type: ignore
     except Exception:
         hdbscan = None  # type: ignore
     labels: np.ndarray | None = None
