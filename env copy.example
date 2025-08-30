@@ -1,5 +1,0 @@
-# Environment variables example
-# Copy to .env and fill in real values
-
-HUGGINGFACE_HUB_TOKEN=your_hf_token_here 
-OPENAI_API_KEY=openai_api_key_here
