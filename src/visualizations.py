@@ -416,24 +416,42 @@ def plot_entity_sentiment_by_category(unified_csv: str, out_dir: str) -> str:
     _ensure_dir(out_dir)
     out = os.path.join(out_dir, "entity_sentiment_by_category.png")
     df = pd.read_csv(unified_csv)
+    # Use overall conversation sentiment by conversation category (intent) if available
+    if {"llm_intent", "llm_sentiment"}.issubset(df.columns):
+        dfx = df[["conversation_id", "llm_intent", "llm_sentiment"]].drop_duplicates()
+        dfx["label"] = dfx["llm_sentiment"].apply(_normalize_sentiment_label)
+        pivot = pd.crosstab(dfx["llm_intent"], dfx["label"]).fillna(0)
+        if pivot.empty:
+            return _save_placeholder(out, "No conversation sentiment by intent data")
+        order_rows = pivot.sum(axis=1).sort_values(ascending=False).head(25).index
+        pivot = pivot.loc[order_rows]
+        for col in ["negative", "neutral", "positive"]:
+            if col not in pivot.columns:
+                pivot[col] = 0
+        pivot = pivot[["negative", "neutral", "positive"]]
+        pivot.plot(kind="bar", stacked=True, figsize=(16, 8))
+        plt.title("Conversation Sentiment by Intent (unique conversations)")
+        plt.ylabel("Conversations")
+        plt.tight_layout()
+        plt.savefig(out, dpi=150)
+        plt.close()
+        return out
+    # Fallback to previous entity-level mentions pivot
     req = {"llm_entity_category", "llm_entity_sentiment"}
     if not req.issubset(df.columns):
-        return _save_placeholder(out, "Missing columns for entity sentiment/category")
-    pivot = (
-        df.pivot_table(
-            index="llm_entity_category",
-            columns="llm_entity_sentiment",
-            values="llm_entity",
-            aggfunc=lambda x: len(set(x)) if x is not None else 0,
-        ).fillna(0)
-    )
+        return _save_placeholder(out, "Missing columns for sentiment/category")
+    pivot = pd.crosstab(df["llm_entity_category"], df["llm_entity_sentiment"]).fillna(0)
     if pivot.empty:
         return _save_placeholder(out, "No entity sentiment/category data")
     order_rows = pivot.sum(axis=1).sort_values(ascending=False).head(20).index
     pivot = pivot.loc[order_rows]
+    for col in ["negative", "neutral", "positive"]:
+        if col not in pivot.columns:
+            pivot[col] = 0
+    pivot = pivot[["negative", "neutral", "positive"]]
     pivot.plot(kind="bar", stacked=True, figsize=(14, 7))
-    plt.title("Entity Sentiment by Category (unique entities)")
-    plt.ylabel("Unique Entities")
+    plt.title("Entity Sentiment by Category (mentions)")
+    plt.ylabel("Mentions")
     plt.tight_layout()
     plt.savefig(out, dpi=150)
     plt.close()
@@ -447,10 +465,9 @@ def plot_entity_sentiment_by_category_llm(unified_csv: str, out_dir: str) -> str
     req = {"llm_entity_category", "llm_sentiment", "llm_entity"}
     if not req.issubset(df.columns):
         return _save_placeholder(out, "Missing columns for LLM entity/category")
-    pivot = df.pivot_table(index="llm_entity_category", columns="llm_sentiment", values="llm_entity", aggfunc=lambda x: len(set(x))).fillna(0)
+    pivot = pd.crosstab(df["llm_entity_category"], df["llm_sentiment"]).fillna(0)
     if pivot.empty:
         return _save_placeholder(out, "No LLM entity/category data")
-    # Ensure left-to-right decreasing by total and consistent sentiment order
     order_rows = pivot.sum(axis=1).sort_values(ascending=False).index
     pivot = pivot.loc[order_rows]
     for col in ["negative", "neutral", "positive"]:
@@ -458,8 +475,8 @@ def plot_entity_sentiment_by_category_llm(unified_csv: str, out_dir: str) -> str
             pivot[col] = 0
     pivot = pivot[["negative", "neutral", "positive"]]
     pivot.plot(kind="bar", stacked=True, figsize=(14, 7))
-    plt.title("Entity Counts by Category split by LLM sentiment")
-    plt.ylabel("Unique Entities")
+    plt.title("Entity Mentions by Category split by LLM sentiment")
+    plt.ylabel("Mentions")
     plt.tight_layout()
     plt.savefig(out, dpi=150)
     plt.close()
@@ -475,7 +492,7 @@ def plot_entity_sentiment_by_category_vader(unified_csv: str, out_dir: str) -> s
         return _save_placeholder(out, "Missing columns for VADER entity/category")
     df = df.copy()
     df["vader_label"] = df.apply(_vader_label, axis=1)
-    pivot = df.pivot_table(index="llm_entity_category", columns="vader_label", values="llm_entity", aggfunc=lambda x: len(set(x))).fillna(0)
+    pivot = pd.crosstab(df["llm_entity_category"], df["vader_label"]).fillna(0)
     if pivot.empty:
         return _save_placeholder(out, "No VADER entity/category data")
     order_rows = pivot.sum(axis=1).sort_values(ascending=False).index
@@ -485,8 +502,8 @@ def plot_entity_sentiment_by_category_vader(unified_csv: str, out_dir: str) -> s
             pivot[col] = 0
     pivot = pivot[["negative", "neutral", "positive"]]
     pivot.plot(kind="bar", stacked=True, figsize=(14, 7))
-    plt.title("Entity Counts by Category split by VADER sentiment")
-    plt.ylabel("Unique Entities")
+    plt.title("Entity Mentions by Category split by VADER sentiment")
+    plt.ylabel("Mentions")
     plt.tight_layout()
     plt.savefig(out, dpi=150)
     plt.close()
@@ -502,7 +519,7 @@ def plot_entity_sentiment_by_category_textblob(unified_csv: str, out_dir: str) -
         return _save_placeholder(out, "Missing columns for TextBlob entity/category")
     df = df.copy()
     df["tb_label"] = df.apply(_textblob_label, axis=1)
-    pivot = df.pivot_table(index="llm_entity_category", columns="tb_label", values="llm_entity", aggfunc=lambda x: len(set(x))).fillna(0)
+    pivot = pd.crosstab(df["llm_entity_category"], df["tb_label"]).fillna(0)
     if pivot.empty:
         return _save_placeholder(out, "No TextBlob entity/category data")
     order_rows = pivot.sum(axis=1).sort_values(ascending=False).index
@@ -512,8 +529,8 @@ def plot_entity_sentiment_by_category_textblob(unified_csv: str, out_dir: str) -
             pivot[col] = 0
     pivot = pivot[["negative", "neutral", "positive"]]
     pivot.plot(kind="bar", stacked=True, figsize=(14, 7))
-    plt.title("Entity Counts by Category split by TextBlob sentiment")
-    plt.ylabel("Unique Entities")
+    plt.title("Entity Mentions by Category split by TextBlob sentiment")
+    plt.ylabel("Mentions")
     plt.tight_layout()
     plt.savefig(out, dpi=150)
     plt.close()
@@ -595,6 +612,7 @@ def _entities_multi_sentiment_chart(df: pd.DataFrame, out: str, title: str, top_
             dfx["label"] = dfx.apply(_vader_label, axis=1)
         else:
             dfx["label"] = dfx.apply(_textblob_label, axis=1)
+        # Frequency mentions per entity per sentiment
         p = pd.crosstab(dfx["llm_entity"], dfx["label"]).reindex(index=top_entities).fillna(0)
         for col in ["negative", "neutral", "positive"]:
             if col not in p.columns:
@@ -681,7 +699,7 @@ def plot_entity_sentiment_by_category_combined(unified_csv: str, out_dir: str) -
             dfx["label"] = dfx.apply(_vader_label, axis=1)
         else:
             dfx["label"] = dfx.apply(_textblob_label, axis=1)
-        pivot = pd.crosstab(dfx["llm_entity_category"], dfx["label"], values=dfx["llm_entity"], aggfunc=lambda x: len(set(x)))
+        pivot = pd.crosstab(dfx["llm_entity_category"], dfx["label"]).fillna(0)
         pivot = pivot.reindex(index=categories).fillna(0)
         for col in ["negative", "neutral", "positive"]:
             if col not in pivot.columns:
@@ -706,7 +724,7 @@ def plot_entity_sentiment_by_category_combined(unified_csv: str, out_dir: str) -
     axes[-1].set_xticks(list(range(len(llm_ct.index))))
     axes[-1].set_xticklabels(llm_ct.index, rotation=45, ha="right")
     axes[0].legend(title="Sentiment")
-    fig.suptitle("Entity Sentiment by Category (LLM, VADER, TextBlob)")
+    fig.suptitle("Entity Mentions by Category (LLM, VADER, TextBlob)")
     plt.tight_layout()
     plt.savefig(out, dpi=150)
     plt.close()
@@ -780,13 +798,272 @@ def plot_brand_store_org_product_multi(unified_csv: str, out_dir: str, top_pairs
     return out
 
 
+def _product_heatmap_with_mentions(df: pd.DataFrame, out: str, row_label: str, top_rows: int, top_cols: int) -> str:
+    try:
+        import seaborn as sns  # type: ignore
+    except Exception:
+        sns = None  # type: ignore
+    import numpy as np
+    if df.empty:
+        return _save_placeholder(out, "No data for mentions heatmap")
+    # Map product sentiment to scores -1/0/1 for coloring
+    score_map = {"negative": -1.0, "neutral": 0.0, "positive": 1.0}
+    df = df.copy()
+    df["sent_score"] = df["product_sentiment"].map(lambda s: score_map.get(str(s).strip().lower(), 0.0))
+    # Mentions: simple counts of pair rows
+    counts = df.groupby([row_label, "product_like"]).size().rename("mentions").reset_index()
+    avg = df.groupby([row_label, "product_like"]).agg(avg_score=("sent_score", "mean")).reset_index()
+    merged = counts.merge(avg, on=[row_label, "product_like"], how="left")
+    if merged.empty:
+        return _save_placeholder(out, "No pair mentions")
+    # Select top rows/cols by total mentions
+    row_order = (
+        merged.groupby(row_label)["mentions"].sum().sort_values(ascending=False).head(top_rows).index.tolist()
+    )
+    col_order = (
+        merged.groupby("product_like")["mentions"].sum().sort_values(ascending=False).head(top_cols).index.tolist()
+    )
+    piv_counts = (
+        merged.pivot(index=row_label, columns="product_like", values="mentions").reindex(index=row_order, columns=col_order)
+    )
+    piv_avg = (
+        merged.pivot(index=row_label, columns="product_like", values="avg_score").reindex(index=row_order, columns=col_order)
+    )
+    piv_counts = piv_counts.fillna(0)
+    piv_avg = piv_avg.fillna(0)
+    plt.figure(figsize=(max(10, len(col_order) * 0.6), max(6, len(row_order) * 0.5)))
+    if sns is not None:
+        sns.heatmap(piv_avg, cmap="RdYlGn", vmin=-1, vmax=1, cbar=True, annot=piv_counts, fmt=".0f", annot_kws={"size": 8})
+    else:
+        plt.imshow(piv_avg.values, cmap="RdYlGn", vmin=-1, vmax=1)
+        ax = plt.gca()
+        for (i, j), val in np.ndenumerate(piv_counts.values):
+            ax.text(j + 0.5, i + 0.5, int(val), ha='center', va='center', color='black')
+        ax.set_xticks(np.arange(len(col_order)) + 0.5)
+        ax.set_yticks(np.arange(len(row_order)) + 0.5)
+        ax.set_xticklabels(col_order)
+        ax.set_yticklabels(row_order)
+    plt.title(f"Mentions heatmap with average sentiment (color) by {row_label.replace('_',' ').title()}")
+    plt.xlabel("Product")
+    plt.ylabel(row_label.replace('_',' ').title())
+    plt.tight_layout()
+    plt.savefig(out, dpi=150)
+    plt.close()
+    return out
+
+
+def plot_store_product_heatmap_mentions(unified_csv: str, out_dir: str, top_rows: int = 30, top_cols: int = 30) -> str:
+    _ensure_dir(out_dir)
+    out = os.path.join(out_dir, "store_product_mentions_heatmap.png")
+    df = pd.read_csv(unified_csv)
+    req = {"conversation_id", "llm_entity", "llm_entity_category", "llm_entity_sentiment"}
+    if not req.issubset(df.columns):
+        return _save_placeholder(out, "Missing columns for store/product mentions heatmap")
+    stores = {"store", "possible_store"}
+    products = {"product", "possible_product"}
+    sdf = df[df["llm_entity_category"].isin(stores)][["conversation_id", "llm_entity", "llm_entity_sentiment"]].rename(columns={"llm_entity": "store_like", "llm_entity_sentiment": "store_sentiment"})
+    pdf = df[df["llm_entity_category"].isin(products)][["conversation_id", "llm_entity", "llm_entity_sentiment"]].rename(columns={"llm_entity": "product_like", "llm_entity_sentiment": "product_sentiment"})
+    merged = sdf.merge(pdf, on="conversation_id", how="inner")
+    if merged.empty:
+        return _save_placeholder(out, "No store-product co-mentions")
+    return _product_heatmap_with_mentions(merged[["conversation_id", "store_like", "product_like", "product_sentiment"]], out, row_label="store_like", top_rows=top_rows, top_cols=top_cols)
+
+
+def plot_brand_product_heatmap_mentions(unified_csv: str, out_dir: str, top_rows: int = 20, top_cols: int = 20) -> str:
+    _ensure_dir(out_dir)
+    out = os.path.join(out_dir, "brand_product_mentions_heatmap.png")
+    df = pd.read_csv(unified_csv)
+    req = {"conversation_id", "llm_entity", "llm_entity_category", "llm_entity_sentiment"}
+    if not req.issubset(df.columns):
+        return _save_placeholder(out, "Missing columns for brand/product mentions heatmap")
+    brands = {"brand", "possible_brand"}
+    products = {"product", "possible_product"}
+    bdf = df[df["llm_entity_category"].isin(brands)][["conversation_id", "llm_entity", "llm_entity_sentiment"]].rename(columns={"llm_entity": "brand_like", "llm_entity_sentiment": "brand_sentiment"})
+    pdf = df[df["llm_entity_category"].isin(products)][["conversation_id", "llm_entity", "llm_entity_sentiment"]].rename(columns={"llm_entity": "product_like", "llm_entity_sentiment": "product_sentiment"})
+    merged = bdf.merge(pdf, on="conversation_id", how="inner")
+    if merged.empty:
+        return _save_placeholder(out, "No brand-product co-mentions")
+    return _product_heatmap_with_mentions(merged[["conversation_id", "brand_like", "product_like", "product_sentiment"]], out, row_label="brand_like", top_rows=top_rows, top_cols=top_cols)
+
+
+def plot_organization_product_heatmap_mentions(unified_csv: str, out_dir: str, top_rows: int = 20, top_cols: int = 20) -> str:
+    _ensure_dir(out_dir)
+    out = os.path.join(out_dir, "organization_product_mentions_heatmap.png")
+    df = pd.read_csv(unified_csv)
+    req = {"conversation_id", "llm_entity", "llm_entity_category", "llm_entity_sentiment"}
+    if not req.issubset(df.columns):
+        return _save_placeholder(out, "Missing columns for organization/product mentions heatmap")
+    orgs = {"organization"}
+    products = {"product", "possible_product"}
+    odf = df[df["llm_entity_category"].isin(orgs)][["conversation_id", "llm_entity", "llm_entity_sentiment"]].rename(columns={"llm_entity": "org_like", "llm_entity_sentiment": "org_sentiment"})
+    pdf = df[df["llm_entity_category"].isin(products)][["conversation_id", "llm_entity", "llm_entity_sentiment"]].rename(columns={"llm_entity": "product_like", "llm_entity_sentiment": "product_sentiment"})
+    merged = odf.merge(pdf, on="conversation_id", how="inner")
+    if merged.empty:
+        return _save_placeholder(out, "No organization-product co-mentions")
+    return _product_heatmap_with_mentions(merged[["conversation_id", "org_like", "product_like", "product_sentiment"]], out, row_label="org_like", top_rows=top_rows, top_cols=top_cols)
+
+
+# Average sentiment charts (entity-weighted)
+
+def plot_entity_avg_sentiment_by_category_llm(unified_csv: str, out_dir: str, top_k: int = 25) -> str:
+    _ensure_dir(out_dir)
+    out = os.path.join(out_dir, "entity_avg_sentiment_by_category_llm.png")
+    df = pd.read_csv(unified_csv)
+    req = {"llm_entity_category", "llm_entity", "llm_sentiment"}
+    if not req.issubset(df.columns):
+        return _save_placeholder(out, "Missing columns for avg sentiment (LLM)")
+    dfx = df.copy()
+    dfx["label"] = dfx["llm_sentiment"].apply(_normalize_sentiment_label)
+    score_map = {"negative": -1.0, "neutral": 0.0, "positive": 1.0}
+    dfx["score"] = dfx["label"].map(score_map).fillna(0.0)
+    ent_means = dfx.groupby(["llm_entity_category", "llm_entity"])['score'].mean().reset_index()
+    cat_means = ent_means.groupby("llm_entity_category")['score'].mean().sort_values(ascending=False)
+    if cat_means.empty:
+        return _save_placeholder(out, "No data for avg sentiment (LLM)")
+    top_cats = dfx.groupby("llm_entity_category")["llm_entity"].nunique().sort_values(ascending=False).head(top_k).index
+    cat_means = cat_means.reindex(top_cats).dropna()
+    plt.figure(figsize=(14, 6))
+    ax = cat_means.plot(kind="bar", color="#6baed6")
+    ax.axhline(0.0, color="black", linewidth=0.8)
+    ax.set_ylim(-1.0, 1.0)
+    plt.ylabel("Average Sentiment (-1..1)")
+    plt.title("Average Entity Sentiment by Category (entity-weighted, LLM)")
+    plt.tight_layout()
+    plt.savefig(out, dpi=150)
+    plt.close()
+    return out
+
+
+def plot_entity_avg_sentiment_by_category_vader(unified_csv: str, out_dir: str, top_k: int = 25) -> str:
+    _ensure_dir(out_dir)
+    out = os.path.join(out_dir, "entity_avg_sentiment_by_category_vader.png")
+    df = pd.read_csv(unified_csv)
+    req = {"llm_entity_category", "llm_entity", "vader_compound"}
+    if not req.issubset(df.columns):
+        return _save_placeholder(out, "Missing columns for avg sentiment (VADER)")
+    dfx = df.copy()
+    dfx["label"] = dfx.apply(_vader_label, axis=1)
+    score_map = {"negative": -1.0, "neutral": 0.0, "positive": 1.0}
+    dfx["score"] = dfx["label"].map(score_map).fillna(0.0)
+    ent_means = dfx.groupby(["llm_entity_category", "llm_entity"])['score'].mean().reset_index()
+    cat_means = ent_means.groupby("llm_entity_category")['score'].mean().sort_values(ascending=False)
+    if cat_means.empty:
+        return _save_placeholder(out, "No data for avg sentiment (VADER)")
+    top_cats = dfx.groupby("llm_entity_category")["llm_entity"].nunique().sort_values(ascending=False).head(top_k).index
+    cat_means = cat_means.reindex(top_cats).dropna()
+    plt.figure(figsize=(14, 6))
+    ax = cat_means.plot(kind="bar", color="#9e9ac8")
+    ax.axhline(0.0, color="black", linewidth=0.8)
+    ax.set_ylim(-1.0, 1.0)
+    plt.ylabel("Average Sentiment (-1..1)")
+    plt.title("Average Entity Sentiment by Category (entity-weighted, VADER)")
+    plt.tight_layout()
+    plt.savefig(out, dpi=150)
+    plt.close()
+    return out
+
+
+def plot_entity_avg_sentiment_by_category_textblob(unified_csv: str, out_dir: str, top_k: int = 25) -> str:
+    _ensure_dir(out_dir)
+    out = os.path.join(out_dir, "entity_avg_sentiment_by_category_textblob.png")
+    df = pd.read_csv(unified_csv)
+    req = {"llm_entity_category", "llm_entity", "tb_polarity"}
+    if not req.issubset(df.columns):
+        return _save_placeholder(out, "Missing columns for avg sentiment (TextBlob)")
+    dfx = df.copy()
+    dfx["label"] = dfx.apply(_textblob_label, axis=1)
+    score_map = {"negative": -1.0, "neutral": 0.0, "positive": 1.0}
+    dfx["score"] = dfx["label"].map(score_map).fillna(0.0)
+    ent_means = dfx.groupby(["llm_entity_category", "llm_entity"])['score'].mean().reset_index()
+    cat_means = ent_means.groupby("llm_entity_category")['score'].mean().sort_values(ascending=False)
+    if cat_means.empty:
+        return _save_placeholder(out, "No data for avg sentiment (TextBlob)")
+    top_cats = dfx.groupby("llm_entity_category")["llm_entity"].nunique().sort_values(ascending=False).head(top_k).index
+    cat_means = cat_means.reindex(top_cats).dropna()
+    plt.figure(figsize=(14, 6))
+    ax = cat_means.plot(kind="bar", color="#2ca25f")
+    ax.axhline(0.0, color="black", linewidth=0.8)
+    ax.set_ylim(-1.0, 1.0)
+    plt.ylabel("Average Sentiment (-1..1)")
+    plt.title("Average Entity Sentiment by Category (entity-weighted, TextBlob)")
+    plt.tight_layout()
+    plt.savefig(out, dpi=150)
+    plt.close()
+    return out
+
+
+def plot_entity_avg_sentiment_by_category_combined(unified_csv: str, out_dir: str, top_k: int = 25) -> str:
+    _ensure_dir(out_dir)
+    out = os.path.join(out_dir, "entity_avg_sentiment_by_category_combined.png")
+    df = pd.read_csv(unified_csv)
+    req = {"llm_entity_category", "llm_entity", "llm_sentiment", "vader_compound", "tb_polarity"}
+    if not req.issubset(df.columns):
+        return _save_placeholder(out, "Missing columns for avg sentiment (combined)")
+    def cat_means_for(mapper: str) -> pd.Series:
+        dfx = df.copy()
+        if mapper == "llm":
+            dfx["label"] = dfx["llm_sentiment"].apply(_normalize_sentiment_label)
+        elif mapper == "vader":
+            dfx["label"] = dfx.apply(_vader_label, axis=1)
+        else:
+            dfx["label"] = dfx.apply(_textblob_label, axis=1)
+        score_map = {"negative": -1.0, "neutral": 0.0, "positive": 1.0}
+        dfx["score"] = dfx["label"].map(score_map).fillna(0.0)
+        ent_means = dfx.groupby(["llm_entity_category", "llm_entity"])['score'].mean().reset_index()
+        return ent_means.groupby("llm_entity_category")['score'].mean().sort_values(ascending=False)
+    llm_means = cat_means_for("llm")
+    vader_means = cat_means_for("vader")
+    tb_means = cat_means_for("tb")
+    top_cats = df.groupby("llm_entity_category")["llm_entity"].nunique().sort_values(ascending=False).head(top_k).index
+    llm_means = llm_means.reindex(top_cats).dropna()
+    vader_means = vader_means.reindex(top_cats).dropna()
+    tb_means = tb_means.reindex(top_cats).dropna()
+    import numpy as np
+    fig, axes = plt.subplots(3, 1, figsize=(20, 14), sharex=True)
+    for ax, series, title, color in zip(axes, [llm_means, vader_means, tb_means], ["LLM", "VADER", "TextBlob"], ["#6baed6", "#9e9ac8", "#2ca25f"]):
+        ax.bar(series.index, series.values, color=color)
+        ax.axhline(0.0, color="black", linewidth=0.8)
+        ax.set_ylim(-1.0, 1.0)
+        ax.set_ylabel("Avg Sent (-1..1)")
+        ax.set_title(title)
+    axes[-1].set_xticklabels(top_cats, rotation=45, ha="right")
+    fig.suptitle("Average Entity Sentiment by Category (entity-weighted)")
+    plt.tight_layout()
+    plt.savefig(out, dpi=150)
+    plt.close()
+    return out
+
+
+# Utility outputs
+
+def write_entity_cluster_frequency_table(unified_csv: str, out_csv: str = "reports/entity_cluster_frequency.csv") -> str:
+    os.makedirs(os.path.dirname(out_csv), exist_ok=True)
+    df = pd.read_csv(unified_csv)
+    if "entity_cluster_id" not in df.columns:
+        # If clusters are missing, summarize by entity instead
+        freq = df["llm_entity"].value_counts().rename_axis("entity").reset_index(name="mentions")
+        freq.to_csv(out_csv, index=False)
+        return out_csv
+    # Keep non-noise clusters and compute mentions per cluster
+    sub = df[df["entity_cluster_id"].ge(0)].copy()
+    if sub.empty:
+        pd.DataFrame(columns=["entity_cluster_id", "entity_cluster_label", "mentions"]).to_csv(out_csv, index=False)
+        return out_csv
+    freq = (
+        sub.groupby(["entity_cluster_id", "entity_cluster_label"]).size().rename("mentions").reset_index()
+    )
+    freq = freq.sort_values("mentions", ascending=False)
+    freq.to_csv(out_csv, index=False)
+    return out_csv
+
+
 # --- Generate all ---
 
 def generate_all(unified_csv: str, out_dir: str = "reports/images") -> Dict[str, str]:
     return {
         "intent_distribution": plot_intents_distribution(unified_csv, out_dir),
+        # "sentiment_by_topic": plot_sentiment_by_topic(unified_csv, out_dir),  # removed per request
         "entity_clusters_top_labeled": plot_top_entity_clusters_labeled(unified_csv, out_dir),
-        "entity_clusters_by_category": plot_entity_clusters_by_category(unified_csv, out_dir),
         "entity_category_counts": plot_entity_category_counts(unified_csv, out_dir),
         "sentiment_overlap_llm_vs_vader": plot_sentiment_overlap_vader(unified_csv, out_dir),
         "sentiment_overlap_llm_vs_textblob": plot_sentiment_overlap_textblob(unified_csv, out_dir),
@@ -795,14 +1072,18 @@ def generate_all(unified_csv: str, out_dir: str = "reports/images") -> Dict[str,
         "entity_sentiment_by_category_vader": plot_entity_sentiment_by_category_vader(unified_csv, out_dir),
         "entity_sentiment_by_category_textblob": plot_entity_sentiment_by_category_textblob(unified_csv, out_dir),
         "entity_sentiment_by_category_combined": plot_entity_sentiment_by_category_combined(unified_csv, out_dir),
+        "entity_avg_sentiment_by_category_llm": plot_entity_avg_sentiment_by_category_llm(unified_csv, out_dir),
+        "entity_avg_sentiment_by_category_vader": plot_entity_avg_sentiment_by_category_vader(unified_csv, out_dir),
+        "entity_avg_sentiment_by_category_textblob": plot_entity_avg_sentiment_by_category_textblob(unified_csv, out_dir),
+        "entity_avg_sentiment_by_category_combined": plot_entity_avg_sentiment_by_category_combined(unified_csv, out_dir),
         "entities_brand_multi": plot_entities_brand_multi(unified_csv, out_dir),
         "entities_org_multi": plot_entities_org_multi(unified_csv, out_dir),
         "entities_possible_product_multi": plot_entities_possible_product_multi(unified_csv, out_dir),
         "entities_possible_store_multi": plot_entities_possible_store_multi(unified_csv, out_dir),
         "entities_possible_brand_multi": plot_entities_possible_brand_multi(unified_csv, out_dir),
-        "store_product_heatmap": plot_store_product_heatmap(unified_csv, out_dir),
-        "brand_product_heatmap": plot_brand_product_heatmap(unified_csv, out_dir),
-        "organization_product_heatmap": plot_organization_product_heatmap(unified_csv, out_dir),
+        "store_product_mentions_heatmap": plot_store_product_heatmap_mentions(unified_csv, out_dir),
+        "brand_product_mentions_heatmap": plot_brand_product_heatmap_mentions(unified_csv, out_dir),
+        "organization_product_mentions_heatmap": plot_organization_product_mentions_heatmap(unified_csv, out_dir),
     }
 
 

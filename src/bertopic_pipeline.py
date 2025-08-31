@@ -106,15 +106,15 @@ def run_bertopic(
     def build_model(min_df: int, max_df: float, ngram: Tuple[int, int]) -> BERTopic:
         vectorizer_model = CountVectorizer(stop_words=stop, ngram_range=ngram, min_df=min_df, max_df=max_df)
         return BERTopic(
-            embedding_model=embedding_model,
-            min_topic_size=min_topic_size,
-            umap_model=umap_model,
-            hdbscan_model=hdbscan_model,
-            vectorizer_model=vectorizer_model,
-            representation_model=rep,
-            calculate_probabilities=True,
-            verbose=False,
-        )
+        embedding_model=embedding_model,
+        min_topic_size=min_topic_size,
+        umap_model=umap_model,
+        hdbscan_model=hdbscan_model,
+        vectorizer_model=vectorizer_model,
+        representation_model=rep,
+        calculate_probabilities=True,
+        verbose=False,
+    )
 
     topics_full: List[int] = [-1] * len(docs)
     probs_full: Optional[List[List[float]]] = None
@@ -129,11 +129,11 @@ def run_bertopic(
             topic_model = build_model(min_df=1, max_df=1.0, ngram=(1, 1))
             topics_eff, probs_eff = topic_model.fit_transform(eff_docs)
         # Reduce outliers
-        try:
+    try:
             new_topics_eff = topic_model.reduce_outliers(eff_docs, topics_eff, probabilities=probs_eff)
             topic_model.update_topics(eff_docs, topics=new_topics_eff)
             topics_eff = new_topics_eff
-        except Exception:
+    except Exception:
             pass
         # Map back
         for j, i in enumerate(idx_sufficient):

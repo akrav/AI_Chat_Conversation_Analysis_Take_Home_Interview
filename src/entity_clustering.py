@@ -42,7 +42,7 @@ def _cluster_embeddings(embeddings: np.ndarray, min_cluster_size: int = 3) -> np
     labels: np.ndarray | None = None
     if hdbscan is not None:
         try:
-            clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, metric="euclidean")
+    clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, metric="euclidean")
             labels = clusterer.fit_predict(embeddings).astype(int)
         except Exception:
             labels = None

@@ -190,46 +190,51 @@ python -m src.run_pipeline --limit 1000 --llm_model gpt-4.1-nano --max_llm_rows 
 ## Visualizations and what they tell us
 
 - Intent distribution (`intent_distribution.png`)
-  - Business value: mix of use‑cases (e.g., Creative Writing vs Product Inquiry) guiding content/support strategy.
+  - Overview, what categories are talked about and how many Conversation Chains are there about that category.
 
 - Entity category counts (`entity_category_counts.png`)
-  - Which categories dominate (brand/store/product/organization/possible_*). Helps scope brand/product analytics.
+  - Which entity categories had the highest number of unique entities. Helps scope brand/product analytics. (Example Category: Software, Example entities: Nike, nike, and adidas would be 2 unique entities)
 
 - Entity clusters (labeled) (`entity_clusters_top_labeled.png`)
-  - Top clusters by number of unique entities; labels show top normalized names per cluster. Identifies major themes/competitors.
+  - Top clusters by number of unique entities; labels show top normalized names per cluster. Identifies major themes/competitors. (Cluster by entity, similarity, and how many unique entities are in those clusters.)
 
-- Entity clusters by category (`entity_clusters_by_category.png`)
-  - Unique conversations per category (using cluster presence); breadth of attention across categories.
 
 - Entity sentiment by category — LLM (`entity_sentiment_by_category_llm.png`)
-  - For each category, counts by LLM sentiment. Where is sentiment polarized?
+  - Frequency chart. For each category, bars show the number of entity mentions in Negative/Neutral/Positive per LLM sentiment. Mixed sentiment is not averaged; an entity with both positive and negative mentions contributes to both buckets according to its mentions.
 
 - Entity sentiment by category — VADER (`entity_sentiment_by_category_vader.png`)
-  - Rule‑based comparison to LLM; highlights agreement or mismatch.
+  - Frequency chart. Mentions per category split into Negative/Neutral/Positive using VADER labels.
 
 - Entity sentiment by category — TextBlob (`entity_sentiment_by_category_textblob.png`)
-  - Second rule‑based comparison; triangulate with VADER and LLM.
+  - Frequency chart. Mentions per category split into Negative/Neutral/Positive using TextBlob labels.
 
 - Entity sentiment by category — Combined (`entity_sentiment_by_category_combined.png`)
-  - Side‑by‑side panels (LLM/VADER/TextBlob) for quick comparison across categories.
+  - Side‑by‑side frequency panels (LLM/VADER/TextBlob) showing mentions per category by sentiment. No averaging.
+
+Average sentiment by category — LLM/VADER/TextBlob (`entity_avg_sentiment_by_category_[method].png`)
+  - Average sentiment scored as −1 (negative), 0 (neutral), +1 (positive), averaged per entity, then averaged across unique entities in each category (entity‑weighted). Shows a single bar per category per method.
+
+Average sentiment by category — Combined (`entity_avg_sentiment_by_category_combined.png`)
+  - Three stacked panels (LLM/VADER/TextBlob) showing entity‑weighted average sentiment by category for quick comparison.
 
 - Entities — Brand multi‑sentiment (`entities_brand_multi.png`)
-  - Multi‑panel sentiment counts for the Brand category (top entities), left→right descending.
+  - Multi‑panel frequency chart for the Brand category. Each entity’s stacked bar shows how many of its mentions are Negative/Neutral/Positive for LLM, VADER, and TextBlob.
 
 - Entities — Organization multi‑sentiment (`entities_organization_multi.png`)
-  - Same for Organization category.
+  - Multi‑panel frequency chart for the Organization category; stacked bars count mentions per sentiment.
 
 - Entities — Possible brand/store/product multi‑sentiment (`entities_possible_brand_multi.png`, `entities_possible_store_multi.png`, `entities_possible_product_multi.png`)
   - Tracks ambiguous mentions likely to be brands/stores/products; useful for discovery.
+  - Multi‑panel frequency charts; stacked bars count mentions per sentiment.
 
-- Store→Product heatmap (`store_product_heatmap.png`)
-  - Rows: top stores; columns: top products; cell text: unique conversation count; color: average product sentiment (−1..1). Shows which products drive sentiment for each store.
+- Store→Product mentions heatmap (`store_product_mentions_heatmap.png`)
+  - Rows: top stores; columns: top products; numbers: mention counts; color: average product sentiment (−1..1). Mentions-only version retained.
 
-- Brand→Product heatmap (`brand_product_heatmap.png`)
-  - Same as above but for brands.
+- Brand→Product mentions heatmap (`brand_product_mentions_heatmap.png`)
+  - Mentions-only version retained.
 
-- Organization→Product heatmap (`organization_product_heatmap.png`)
-  - Same as above but for organizations.
+- Organization→Product mentions heatmap (`organization_product_mentions_heatmap.png`)
+  - Mentions-only version retained.
 
 - Sentiment overlap — LLM vs VADER (`sentiment_overlap_llm_vs_vader.png`)
   - Agreement/mismatch matrix across overall sentiment labels.
@@ -237,81 +242,49 @@ python -m src.run_pipeline --limit 1000 --llm_model gpt-4.1-nano --max_llm_rows 
 - Sentiment overlap — LLM vs TextBlob (`sentiment_overlap_llm_vs_textblob.png`)
   - Agreement/mismatch matrix with TextBlob.
 
-Note: `sentiment_by_topic.png` has been deprecated and is no longer generated.
+Notes:
+- `sentiment_by_topic.png` has been deprecated and is no longer generated.
+- “Mentions” are pure row counts from the unified table; mixed sentiment is not averaged. An entity may appear in multiple sentiment buckets proportional to its mention counts.
+- “Average sentiment by category” uses entity‑weighted averages: map sentiment to −1/0/+1, average per entity (to avoid over‑counting repeated mentions of the same entity), then average across unique entities in the category.
 
 ---
 
-## Data science framing: what the tables show and why it matters
+## Visuals overview (what each chart shows)
 
-- `unified_table.csv` (entity‑level)
-  - Each row is a conversation × entity pairing, with per‑entity sentiment, category, topic context, and rule‑based scores. This is the canonical table for pivoting by brand/store/org/product.
-  - Example pivots:
-    - Top products by unique conversations and their average sentiment
-    - Brand→product co‑mentions with mean product sentiment (heatmaps)
-    - Category‑level distributions of sentiment across LLM and rule‑based methods
+- Intent distribution: `reports/images/intent_distribution.png`
+  - Top conversation intents by unique conversations.
 
-- Topics
-  - Use topic names and IDs to filter subsets (e.g., product complaint topics) before looking at entity sentiment within that slice.
+- Conversation sentiment by intent: `reports/images/entity_sentiment_by_category.png`
+  - Stacked Negative/Neutral/Positive counts of unique conversations per intent.
 
-- Clusters
-  - Collapse spelling variants and near‑duplicates into clusters to estimate share‑of‑voice across similar items or competitors.
+- Entity category counts: `reports/images/entity_category_counts.png`
+  - Unique entities per category (e.g., brand, organization, product).
 
----
+- Entities — multi-sentiment (mentions-only):
+  - Brand: `reports/images/entities_brand_multi.png`
+  - Organization: `reports/images/entities_organization_multi.png`
+  - Possible brand/store/product: 
+    - `reports/images/entities_possible_brand_multi.png`
+    - `reports/images/entities_possible_store_multi.png`
+    - `reports/images/entities_possible_product_multi.png`
+  - Each stacked bar shows mention counts in Negative/Neutral/Positive for LLM/VADER/TextBlob.
 
-## Troubleshooting & tips
+- Mentions heatmaps (with average sentiment color):
+  - Store→Product: `reports/images/store_product_mentions_heatmap.png`
+  - Brand→Product: `reports/images/brand_product_mentions_heatmap.png`
+  - Organization→Product: `reports/images/organization_product_mentions_heatmap.png`
+  - Numbers are mention counts; color encodes mean product sentiment (−1..1).
 
-- `.env` parsing error (python‑dotenv): only `KEY=VALUE` lines are allowed, one per line. No `export`, no YAML/JSON, quotes must be balanced. Example:
-  ```
-  OPENAI_API_KEY=sk-...
-  TOKENIZERS_PARALLELISM=false
-  ```
-- TOKENIZERS_PARALLELISM warning (Hugging Face tokenizers)
-  - What it is: HF tokenizers can use multi‑process parallelism internally. When a Python process forks after tokenizers have been initialized, the library disables parallelism to avoid deadlocks and prints a warning.
-  - Why you see it: We call tokenizers (via BERTopic/transformers) before forking or in contexts where concurrency is used; the library warns and switches to a safe mode.
-  - Impact: Performance only; computations remain correct. Safe to ignore.
-  - How to silence: set `TOKENIZERS_PARALLELISM=false` in your shell or `.env`.
-- 401 Unauthorized from OpenAI: key missing/invalid or model not permitted. Verify `OPENAI_API_KEY` in the shell and try a model you can access.
-- 429 Too Many Requests: reduce `--concurrency`, or add backoff (already present) time.
-- Verify LLM outputs: nested lines and flat rows are logged; the pipeline checks that nested lines equal expected rows.
-- Hugging Face dataset gating: use public paths or provide a valid token if needed.
+- Average sentiment by category (entity-weighted):
+  - LLM: `reports/images/entity_avg_sentiment_by_category_llm.png`
+  - VADER: `reports/images/entity_avg_sentiment_by_category_vader.png`
+  - TextBlob: `reports/images/entity_avg_sentiment_by_category_textblob.png`
+  - Combined panels: `reports/images/entity_avg_sentiment_by_category_combined.png`
 
----
+Notes:
+- Mentions are pure frequency; mixed sentiment is not averaged.
+- Average sentiment uses entity-weighting: per-mention −1/0/+1 → mean per entity → mean across entities in the category.
 
-## Why this methodology
+## Insights
 
-- Hybrid approach: unsupervised topics give breadth; LLM extraction provides depth (fine‑grained entities/sentiment/intent).
-- Multiple sentiment methods: triangulate for confidence and error‑checking.
-- Flattened entity rows: enables standard analytics (pivots, aggregations) and graphing.
-- Clear data lifecycle: raw → interim → processed → analysis preserves reproducibility and makes failures observable.
-
----
-
-## Example commands
-
-- Full (1000 rows):
-```bash
-source .venv/bin/activate && OPENAI_API_KEY="$OPENAI_API_KEY" \
-python -m src.run_pipeline --limit 1000 --llm_model gpt-4.1-nano --max_llm_rows all --concurrency 1
-```
-
-- Resume after LLM (reuse existing results):
-```bash
-python -m src.run_pipeline --limit 1000 --llm_model gpt-4.1-nano --max_llm_rows all --concurrency 1 --skip_llm
-```
-
-- LLM only:
-```bash
-OPENAI_API_KEY="$OPENAI_API_KEY" python -m src.llm_analysis \
-  data/02_interim/wildchat_english_notoxic_1000_cleaned.jsonl \
-  data/03_processed/llm_analysis_results.jsonl \
-  --model gpt-4.1-nano --max_rows all --concurrency 1
-```
-
-- Small test:
-```bash
-OPENAI_API_KEY="$OPENAI_API_KEY" python -m src.run_pipeline --limit 5 --llm_model gpt-4.1-nano --max_llm_rows 5 --concurrency 1
-```
-
----
-
-Questions or new analysis needs? Run the pipeline on a filtered subset (by topic or category), then use the same visuals to compare slices.
+See the full analysis and actionable recommendations in the Insights Document: `Insights Document.md`.
