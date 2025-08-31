@@ -785,7 +785,6 @@ def plot_brand_store_org_product_multi(unified_csv: str, out_dir: str, top_pairs
 def generate_all(unified_csv: str, out_dir: str = "reports/images") -> Dict[str, str]:
     return {
         "intent_distribution": plot_intents_distribution(unified_csv, out_dir),
-        "sentiment_by_topic": plot_sentiment_by_topic(unified_csv, out_dir),
         "entity_clusters_top_labeled": plot_top_entity_clusters_labeled(unified_csv, out_dir),
         "entity_clusters_by_category": plot_entity_clusters_by_category(unified_csv, out_dir),
         "entity_category_counts": plot_entity_category_counts(unified_csv, out_dir),

@@ -4,6 +4,8 @@ import json
 import os
 import asyncio
 import random
+import time
+import logging
 from typing import Iterable, List, Dict, Optional
 
 import pandas as pd
@@ -17,6 +19,14 @@ try:
 except Exception:  # pragma: no cover
     OpenAI = None  # type: ignore
     AsyncOpenAI = None  # type: ignore
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    _h = logging.StreamHandler()
+    _fmt = logging.Formatter("[%(asctime)s] %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
+    _h.setFormatter(_fmt)
+    logger.addHandler(_h)
 
 
 def _get_openai_client():
@@ -123,11 +133,19 @@ def analyze_rows_with_llm(
         text_parts = [t.get("content", "") for t in conversation if t.get("content")]
         text = "\n".join(text_parts)[:8000]
         prompt = _build_unified_prompt(text)
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0,
-        )
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+                response_format={"type": "json_object"},
+            )
+        except Exception:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+            )
         content = resp.choices[0].message.content or "{}"
         parsed = _ensure_llm_object_shape(_parse_json_content(content))
         enriched = dict(row)
@@ -145,11 +163,19 @@ async def _analyze_single_async(client, row: dict, model: str, retries: int = 5)
     attempt = 0
     while True:
         try:
-            resp = await client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0,
-            )
+            try:
+                resp = await client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0,
+                    response_format={"type": "json_object"},
+                )
+            except Exception:
+                resp = await client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0,
+                )
             content = resp.choices[0].message.content or "{}"
             parsed = _ensure_llm_object_shape(_parse_json_content(content))
             enriched = dict(row)
@@ -173,6 +199,7 @@ async def _analyze_rows_with_llm_async(
     rows: List[dict],
     model: str,
     concurrency: int = 6,
+    log_every: int = 25,
 ) -> List[dict]:
     client = _get_async_client()
     sem = asyncio.Semaphore(concurrency)
@@ -181,9 +208,28 @@ async def _analyze_rows_with_llm_async(
         async with sem:
             return await _analyze_single_async(client, r, model)
 
-    coros = [bound_analyze(r) for r in rows]
-    results = await asyncio.gather(*coros)
-    return list(results)
+    total = len(rows)
+    start = time.time()
+    completed = 0
+    results: List[dict] = []
+
+    tasks = [asyncio.create_task(bound_analyze(r)) for r in rows]
+
+    for coro in asyncio.as_completed(tasks):
+        res = await coro
+        results.append(res)
+        completed += 1
+        if completed == 1 or (completed % max(1, log_every) == 0) or completed == total:
+            elapsed = time.time() - start
+            rate = completed / elapsed if elapsed > 0 else 0.0
+            remaining = total - completed
+            eta_sec = remaining / rate if rate > 0 else float('inf')
+            logger.info(
+                f"LLM progress: {completed}/{total} (concurrency={concurrency}) | "
+                f"elapsed={elapsed:.1f}s, rate={rate:.2f}/s, eta={eta_sec/60:.1f}m"
+            )
+
+    return results
 
 
 def run_llm_on_subset(
@@ -191,8 +237,9 @@ def run_llm_on_subset(
     output_path: str,
     tasks: Optional[List[str]] = None,  # kept for compatibility, ignored
     model: str = "gpt-4.1-nano",
-    max_rows: Optional[int] = 1000,
+    max_rows: Optional[int] = None,
     concurrency: int = 6,
+    log_every: int = 25,
 ) -> str:
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(subset_jsonl_path, "r", encoding="utf-8") as f:
@@ -200,24 +247,98 @@ def run_llm_on_subset(
     if max_rows is not None:
         rows = rows[: max_rows]
 
-    enriched: List[dict] = asyncio.run(_analyze_rows_with_llm_async(rows, model=model, concurrency=concurrency))
+    logger.info(f"Starting LLM analysis: rows={len(rows)}, concurrency={concurrency}, model={model}")
+    start = time.time()
+    enriched: List[dict] = asyncio.run(_analyze_rows_with_llm_async(rows, model=model, concurrency=concurrency, log_every=log_every))
+    logger.info(f"LLM analysis completed in {time.time()-start:.1f}s")
 
-    with open(output_path, "w", encoding="utf-8") as f:
+    # Prepare paths
+    base = os.path.splitext(output_path)[0]
+    nested_jsonl = base + "_nested.jsonl"
+    flat_jsonl = output_path  # primary output is FLAT JSONL
+    flat_csv = base + ".csv"
+
+    # 1) Write nested JSONL (debug/reference)
+    with open(nested_jsonl, "w", encoding="utf-8") as f:
         for r in enriched:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
-    return output_path
+    logger.info(f"Wrote nested LLM results to {nested_jsonl} (rows={len(enriched)})")
+
+    # 2) Build flat rows and write FLAT JSONL + CSV (primary outputs)
+    flat_rows: List[Dict] = []
+    for obj in enriched:
+        cid = obj.get('conversation_id')
+        la = obj.get('llm_analysis', {}) or {}
+        intent = (la.get('intent') or {})
+        senti = (la.get('sentiment') or {})
+        ents = ((la.get('entities') or {}).get('entities') or [])
+        if not ents:
+            flat_rows.append({
+                'conversation_id': cid,
+                'llm_intent': intent.get('intent'),
+                'llm_intent_confidence': intent.get('confidence'),
+                'llm_sentiment': senti.get('sentiment'),
+                'llm_sent_confidence': senti.get('confidence'),
+                'llm_entity': None,
+                'llm_entity_category': None,
+                'llm_entity_sentiment': None,
+                'llm_entity_sent_confidence': None,
+            })
+        else:
+            for e in ents:
+                if isinstance(e, dict):
+                    flat_rows.append({
+                        'conversation_id': cid,
+                        'llm_intent': intent.get('intent'),
+                        'llm_intent_confidence': intent.get('confidence'),
+                        'llm_sentiment': senti.get('sentiment'),
+                        'llm_sent_confidence': senti.get('confidence'),
+                        'llm_entity': e.get('text'),
+                        'llm_entity_category': e.get('category'),
+                        'llm_entity_sentiment': e.get('entity_sentiment'),
+                        'llm_entity_sent_confidence': e.get('entity_sent_confidence'),
+                    })
+
+    with open(flat_jsonl, 'w', encoding='utf-8') as w:
+        for rec in flat_rows:
+            w.write(json.dumps(rec, ensure_ascii=False) + '\n')
+    pd.DataFrame(flat_rows).to_csv(flat_csv, index=False)
+    logger.info(f"Wrote FLAT LLM results to {flat_jsonl} and {flat_csv} (rows={len(flat_rows)})")
+
+    return flat_jsonl
 
 
 if __name__ == "__main__":  # pragma: no cover
     import argparse
 
+    # Allow "all" to mean no cap
+    def _parse_max_rows_arg(v: Optional[str]) -> Optional[int]:
+        if v is None:
+            return None
+        s = str(v).strip().lower()
+        if s in {"all", "max", "*", "none", "-1"}:
+            return None
+        try:
+            n = int(s)
+            return None if n < 0 else n
+        except Exception:
+            return None
+
     parser = argparse.ArgumentParser(description="Run LLM analysis on a subset JSONL")
     parser.add_argument("subset", help="Path to subset JSONL")
     parser.add_argument("output", help="Path to output JSONL with LLM analysis")
     parser.add_argument("--model", default="gpt-4.1-nano")
-    parser.add_argument("--max_rows", type=int, default=1000)
+    parser.add_argument("--max_rows", default="all")
     parser.add_argument("--concurrency", type=int, default=6)
+    parser.add_argument("--log_every", type=int, default=25)
     args = parser.parse_args()
 
-    out = run_llm_on_subset(args.subset, args.output, model=args.model, max_rows=args.max_rows, concurrency=args.concurrency)
+    out = run_llm_on_subset(
+        args.subset,
+        args.output,
+        model=args.model,
+        max_rows=_parse_max_rows_arg(args.max_rows),
+        concurrency=args.concurrency,
+        log_every=args.log_every,
+    )
     print(out)

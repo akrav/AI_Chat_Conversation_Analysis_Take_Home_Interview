@@ -40,3 +40,4 @@ nltk==3.9.1
 textblob==0.18.0.post0
 openai
 python-dotenv
+openpyxl>=3.1.0

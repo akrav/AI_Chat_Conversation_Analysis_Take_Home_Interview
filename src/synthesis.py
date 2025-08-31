@@ -23,42 +23,29 @@ def _load_cleaned_df(cleaned_jsonl_path: str) -> pd.DataFrame:
 
 
 def _load_llm_df(llm_jsonl_path: str) -> pd.DataFrame:
+    # Expect a FLAT JSONL from llm_analysis.py with one row per entity and columns:
+    # conversation_id, llm_intent, llm_intent_confidence, llm_sentiment, llm_sent_confidence,
+    # llm_entity, llm_entity_category, llm_entity_sentiment, llm_entity_sent_confidence
+    rows: List[Dict] = []
     with open(llm_jsonl_path, "r", encoding="utf-8") as f:
-        rows = [json.loads(line) for line in f]
-    recs: List[Dict] = []
-    for r in rows:
-        cid = r.get("conversation_id", None)
-        la = r.get("llm_analysis", {})
-        intent_obj = la.get("intent", {}) if isinstance(la.get("intent", {}), dict) else {}
-        sent_obj = la.get("sentiment", {}) if isinstance(la.get("sentiment", {}), dict) else {}
-        ent_obj = la.get("entities", {}) if isinstance(la.get("entities", {}), dict) else {}
-        ent_list = ent_obj.get("entities", []) if isinstance(ent_obj.get("entities", []), list) else []
-        # Ensure at least one entity row; rely on LLM v4 to provide it
-        if not ent_list:
-            ent_list = [{"text": None, "category": "other", "entity_sentiment": "neutral", "entity_sent_confidence": 0.5}]
-        for item in ent_list:
-            if isinstance(item, dict):
-                e_text = item.get("text")
-                e_cat = item.get("category")
-                e_sent = item.get("entity_sentiment")
-                e_conf = item.get("entity_sent_confidence")
-            else:
-                e_text = str(item)
-                e_cat = "other"
-                e_sent = "neutral"
-                e_conf = 0.5
-            recs.append({
-                "conversation_id": cid,
-                "llm_intent": intent_obj.get("intent"),
-                "llm_intent_confidence": intent_obj.get("confidence"),
-                "llm_sentiment": sent_obj.get("sentiment"),
-                "llm_sent_confidence": sent_obj.get("confidence"),
-                "llm_entity": e_text,
-                "llm_entity_category": e_cat,
-                "llm_entity_sentiment": e_sent,
-                "llm_entity_sent_confidence": e_conf,
-            })
-    return pd.DataFrame(recs)
+        for line in f:
+            rows.append(json.loads(line))
+    df = pd.DataFrame(rows)
+    # Ensure expected columns exist even if empty
+    for col in [
+        "conversation_id",
+        "llm_intent", "llm_intent_confidence",
+        "llm_sentiment", "llm_sent_confidence",
+        "llm_entity", "llm_entity_category", "llm_entity_sentiment", "llm_entity_sent_confidence",
+    ]:
+        if col not in df.columns:
+            df[col] = None
+    return df[[
+        "conversation_id",
+        "llm_intent", "llm_intent_confidence",
+        "llm_sentiment", "llm_sent_confidence",
+        "llm_entity", "llm_entity_category", "llm_entity_sentiment", "llm_entity_sent_confidence",
+    ]]
 
 
 def _load_pairs_df(pairs_jsonl_path: str) -> pd.DataFrame:
@@ -96,6 +83,11 @@ def build_unified_table(
     doc_topics = doc_topics.merge(topics_df[["topic_id", "topic_name"]], on="topic_id", how="left")
 
     rule_df = pd.read_csv(rule_based_csv_path) if os.path.exists(rule_based_csv_path) else pd.DataFrame()
+    # Support both new and legacy LLM filenames
+    if not os.path.exists(llm_jsonl_path):
+        alt = os.path.join(os.path.dirname(llm_jsonl_path), 'llm_analysis_results.jsonl')
+        if os.path.exists(alt):
+            llm_jsonl_path = alt
     llm_df = _load_llm_df(llm_jsonl_path) if os.path.exists(llm_jsonl_path) else pd.DataFrame()
     pairs_df = _load_pairs_df(pairs_jsonl_path) if pairs_jsonl_path and os.path.exists(pairs_jsonl_path) else pd.DataFrame()
 
@@ -124,7 +116,19 @@ def build_unified_table(
     cols = [c for c in desired_cols if c in base.columns]
 
     out_df = base[cols].copy()
+    # Write CSV
     out_df.to_csv(output_csv_path, index=False)
+
+    # Also write Excel next to CSV for easier viewing
+    try:
+        xlsx_path = os.path.splitext(output_csv_path)[0] + ".xlsx"
+        # Use openpyxl engine if available; pandas will fallback if installed
+        with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
+            out_df.to_excel(writer, index=False, sheet_name="unified_table")
+    except Exception:
+        # Non-fatal if engine not installed; CSV remains primary artifact
+        pass
+
     return output_csv_path 
 
 
